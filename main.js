@@ -1,0 +1,166 @@
+function detectIE() {
+    var ua = window.navigator.userAgent;
+    var msie = ua.indexOf('MSIE ');
+    var trident = ua.indexOf('Trident/');
+
+    if (msie > 0) {
+        // IE 10 or older => return version number
+        return parseInt(ua.substring(msie + 5, ua.indexOf('.', msie)), 10);
+    }
+
+    if (trident > 0) {
+        // IE 11 (or newer) => return version number
+        var rv = ua.indexOf('rv:');
+        return parseInt(ua.substring(rv + 3, ua.indexOf('.', rv)), 10);
+    }
+
+    // other browser
+    return false;
+}
+
+console.log('zappy bird v3');
+
+var main_state = {
+
+    preload: function() { 
+
+        game.stage.scaleMode = Phaser.StageScaleMode.SHOW_ALL; //resize your window to see the stage resize too
+        game.stage.scale.setShowAll();
+        game.stage.scale.refresh();
+        this.game.stage.backgroundColor = '#71c5cf';
+        this.game.load.image('bird', 'assets/bird.png');  
+        this.game.load.image('pipe', 'assets/pipe.png');      
+
+        // Load jump sound
+        this.game.load.audio('collision', 'assets/collision.mp3');
+
+        this.highscore = localStorage.getItem('zappyHighScore');
+        if (isNaN(parseFloat(this.highscore)) && !isFinite(this.highScore)) {
+          this.highscore = 0;
+        }
+        this.score = 0;
+        var style = { font: "30px Arial", fill: "#ffffff" };
+        var bigstyle = { font: "60px Arial", fill: "#ffffff" };
+        this.label_score = this.game.add.text(20, 20, "", style); 
+        this.label_high_score = this.game.add.text(101, 400, 'High Score: ' + this.highscore, style); 
+        this.label_title = this.game.add.text(50, 100, "Zappy Bird", bigstyle); 
+        this.label_start = this.game.add.text(125, 300, "Tap to fly!", style); 
+    },
+
+    create: function() { 
+        this.game.input.onDown.add(this.jump, this);
+
+        this.pipes = game.add.group();
+        this.pipes.createMultiple(20, 'pipe');  
+        this.timer = this.game.time.events.loop(1500, this.add_row_of_pipes, this);
+
+        this.bird = this.game.add.sprite(100, 245, 'bird');
+        this.bird.body.gravity.y = 1000; 
+         // Change the anchor point of the bird
+        this.bird.anchor.setTo(-0.2, 0.5);
+        // Don't be colliding.
+        this.bird.collision = false;
+
+        // Add sounds to the game
+        this.collision_sound = this.game.add.audio('collision');
+    },
+
+    update: function() {
+        if (this.bird.inWorld == false)
+            this.restart_game(); 
+
+        // Make the bird slowly rotate downward
+        if (this.bird.angle < 20)
+            this.bird.angle += 1;
+
+        this.game.physics.overlap(this.bird, this.pipes, this.hit_pipe, null, this);      
+    },
+
+    jump: function() {
+        // if the bird hit a pipe, no jump
+        if (this.bird.alive == false)
+            return; 
+
+        this.label_title.content = "";
+        this.label_start.content = "";
+        this.label_high_score.content = "";
+        this.label_score.content = this.score; 
+
+        this.bird.body.velocity.y = -350;
+
+        // Animation to rotate the bird
+        this.game.add.tween(this.bird).to({angle: -20}, 100).start();
+    },
+
+    // Dead animation when the bird hit a pipe
+    hit_pipe: function() {
+
+        if (this.bird.collision === false) {
+          // Play a collision sound
+          this.collision_sound.play();
+        }
+
+        this.bird.collision = true;
+
+        // If the bird has already hit a pipe, we have nothing to do
+        if (this.bird.alive == false)
+            return;
+
+        // Set the alive flag to false
+        this.bird.alive = false;
+
+        // Prevent new pipes from apearing
+        this.game.time.events.remove(this.timer);
+
+        // Go trough all the pipes, and stop their movement
+        this.pipes.forEachAlive(function(p){
+            p.body.velocity.x = 0;
+        }, this);
+    },
+
+    restart_game: function() {
+        if (this.score > this.highscore) {
+          localStorage.setItem('zappyHighScore', this.score);
+        }
+        this.game.time.events.remove(this.timer);
+        // deshawn
+        // normally we'd just restart the game completely-- how about we set a variable for transition mode vs. play forever?
+        if (this.game.transition === true && this.bird.collision === true) {
+          //do some transitioning or whatever
+          console.log('next game!');
+        } else {
+          this.game.state.start('main');
+        }
+    },
+
+    add_one_pipe: function(x, y) {
+        var pipe = this.pipes.getFirstDead();
+        pipe.reset(x, y);
+        pipe.body.velocity.x = -200; 
+        pipe.outOfBoundsKill = true;
+    },
+
+    add_row_of_pipes: function() {
+        var hole = Math.floor(Math.random()*5)+1;
+
+        for (var i = 0; i < 8; i++)
+            if (i != hole && i != hole +1) 
+                this.add_one_pipe(400, i*60+10);   
+
+        this.score += 1;
+        this.label_score.content = this.score;  
+    },
+};
+
+var renderer = Phaser.AUTO;
+
+if (detectIE) {
+  renderer = Phaser.CANVAS;
+}
+
+var game = new Phaser.Game(400, 490, renderer, 'game_div',{ preload: main_state.preload, create: main_state.create, update: main_state.update, render: main_state.render });
+// deshawn
+// set this if we want to transition rather than play forever
+game.transition = false;
+game.state.add('main', main_state);  
+game.state.start('main'); 
